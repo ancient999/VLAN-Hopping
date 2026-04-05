@@ -65,6 +65,8 @@ VLAN (Virtual LAN) — логическое разделение одного ф
      Фильтр: vlan. Видно поле 802.1Q Virtual LAN, VLAN ID.
      Сделай захват на trunk-интерфейсе в GNS3/EVE-NG или реальном железе. -->
 
+<img width="717" height="611" alt="image" src="https://github.com/user-attachments/assets/bf6fdaa8-8fdd-49ed-9887-95b642fe9c94" />
+
 ---
 
 ## Атака 1: Double Tagging
